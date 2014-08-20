@@ -8,16 +8,16 @@ import (
 
 var ErrInvalidTarget = errors.New("target must be non-nil pointer to struct")
 
-type errProblem struct {
+type Problem struct {
 	Field string
 	Err   error
 }
 
-func (e errProblem) Error() string {
+func (e Problem) Error() string {
 	return e.Field + " " + e.Err.Error()
 }
 
-type Problems map[string]error
+type Problems map[string]*Problem
 type HandlerFunc func(interface{}) (interface{}, error)
 
 var DefaultValidator = NewValidator()
@@ -56,22 +56,24 @@ func (v *Validator) Valid(value interface{}) (Problems, error) {
 	for i := 0; i < s.NumField(); i++ {
 		f := s.Field(i)
 		f2 := t.Field(i)
-		hs := strings.Split(f2.Tag.Get("is"), ",")
+		tag := f2.Tag.Get("is")
+		if len(tag) == 0 {
+			continue
+		}
+		hs := strings.Split(tag, ",")
 		for _, h := range hs {
 			var handlerFunc HandlerFunc
 			var ok bool
 			if handlerFunc, ok = v.Handlers[h]; !ok {
-				panic("is: No such handler " + h)
+				panic("is: no such handler " + h)
 			}
 			newVal, err := handlerFunc(f.Interface())
 			if err != nil {
-				problems[f2.Name] = &errProblem{Field: f2.Name, Err: err}
+				problems[f2.Name] = &Problem{Field: f2.Name, Err: err}
 				break // next field
 			} else {
 				newValV := reflect.ValueOf(newVal)
-				if newValV.IsValid() {
-					f.Set(newValV)
-				}
+				f.Set(newValV)
 			}
 		}
 	}

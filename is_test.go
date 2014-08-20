@@ -10,13 +10,14 @@ import (
 type testType struct {
 	Username string `is:"required,lower"`
 	Email    string `is:"required,email"`
+	Normal   string
 }
 
 func TestIs(t *testing.T) {
 
-	obj := &testType{Username: "MatRyer", Email: "test@test.com"}
+	obj := testType{Username: "MatRyer", Email: "test@test.com"}
 
-	probs, err := is.Valid(obj)
+	probs, err := is.Valid(&obj)
 
 	require.NoError(t, err)
 	require.Equal(t, 0, len(probs))
@@ -27,9 +28,9 @@ func TestIs(t *testing.T) {
 
 func TestIsnt(t *testing.T) {
 
-	obj := &testType{Username: "", Email: "test@test"}
+	obj := testType{Username: "", Email: "test@test"}
 
-	probs, err := is.Valid(obj)
+	probs, err := is.Valid(&obj)
 
 	require.NoError(t, err)
 	require.Equal(t, 2, len(probs))
