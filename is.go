@@ -1,90 +1,48 @@
 package is
 
 import (
-	"encoding/json"
 	"errors"
 	"reflect"
 	"strings"
-	"sync"
 )
-
-var Handlers = map[string]func(interface{}, bool) error{
-	"required": func(v interface{}, present bool) error {
-		// ensures value is present
-
-		if !present || v == nil {
-			return errors.New("is required")
-		}
-		return nil
-	},
-	"nonzero": func(v interface{}, present bool) error {
-		// ensures values aren't zero or ""
-
-		if present && v != nil {
-			switch val := v.(type) {
-			case string:
-				if len(val) > 0 {
-					return nil
-				}
-			case int, int8, int16, int32, int64,
-				uint, uint8, uint16, uint32, uint64,
-				float32, float64, complex64, complex128:
-				if val != 0 {
-					return nil
-				}
-			}
-		}
-		return errors.New("cannot be empty")
-	},
-	"email": func(v interface{}, _ bool) error {
-		// simple and quick email syntax checking
-
-		var email string
-		var ok bool
-		if email, ok = v.(string); !ok {
-			return errors.New("should be a string")
-		}
-		atI := strings.Index(email, "@")
-		ok = atI > 0 && atI < len(email)-1
-		if ok {
-			dotI := strings.LastIndex(email, ".")
-			ok = dotI > atI && dotI < len(email)-1
-		}
-		if !ok {
-			return errors.New("is not a valid email address")
-		}
-
-		return nil
-	},
-}
 
 var ErrInvalidTarget = errors.New("target must be non-nil pointer to struct")
 
-type ErrInvalidHandler struct {
-	Handler string
+type errProblem struct {
+	Field string
+	Err   error
 }
 
-func (e ErrInvalidHandler) Error() string {
-	return e.Handler + " is not a valid handler"
+func (e errProblem) Error() string {
+	return e.Field + " " + e.Err.Error()
 }
 
-type Decoder interface {
-	Decode(interface{}) (map[string]error, error)
+type Problems map[string]error
+type HandlerFunc func(interface{}) (interface{}, error)
+
+var DefaultValidator = NewValidator()
+
+func Valid(value interface{}) (Problems, error) {
+	return DefaultValidator.Valid(value)
 }
 
-type msiDecoder struct {
-	lock     sync.Mutex
-	src      map[string]interface{}
-	handlers map[string]func(interface{}, bool) error
+type Validator struct {
+	Handlers map[string]HandlerFunc
 }
 
-func (m *msiDecoder) Decode(target interface{}) (map[string]error, error) {
-	m.lock.Lock()
-	defer m.lock.Unlock()
+func NewValidator() *Validator {
+	handlers := make(map[string]HandlerFunc)
+	for k, v := range defaultHandlers {
+		handlers[k] = v
+	}
+	return &Validator{Handlers: handlers}
+}
 
-	problems := make(map[string]error)
+func (v *Validator) Valid(value interface{}) (Problems, error) {
 
-	s := reflect.ValueOf(target)
+	problems := make(Problems)
+
+	s := reflect.ValueOf(value)
 	if s.Kind() != reflect.Ptr || s.IsNil() {
 		return nil, ErrInvalidTarget
 	}
@@ -97,72 +55,27 @@ func (m *msiDecoder) Decode(target interface{}) (map[string]error, error) {
 	t := s.Type()
 	for i := 0; i < s.NumField(); i++ {
 		f := s.Field(i)
-
-		switch f.Kind() {
-		case reflect.Ptr:
-			if f.Elem().Kind() != reflect.Struct {
-				break
-			}
-
-			f = f.Elem()
-			fallthrough
-
-		case reflect.Struct:
-			ss := f.Addr().Interface()
-			m.Decode(ss)
-		}
-
-		if !f.CanSet() {
-			continue
-		}
-
-		tag := t.Field(i).Tag.Get("is")
-		if len(tag) == 0 {
-			continue
-		}
-
-		segs := strings.Split(tag, ",")
-		field := segs[0]
-		hs := segs[1:]
-		value, hasValue := m.src[field]
-
-		// run each handler
-		var ok bool = true
+		f2 := t.Field(i)
+		hs := strings.Split(f2.Tag.Get("is"), ",")
 		for _, h := range hs {
-			if handler, ok := m.handlers[h]; !ok {
-				problems[field] = &ErrInvalidHandler{Handler: h}
+			var handlerFunc HandlerFunc
+			var ok bool
+			if handlerFunc, ok = v.Handlers[h]; !ok {
+				panic("is: No such handler " + h)
+			}
+			newVal, err := handlerFunc(f.Interface())
+			if err != nil {
+				problems[f2.Name] = &errProblem{Field: f2.Name, Err: err}
+				break // next field
 			} else {
-				// run it
-				if err := handler(value, hasValue); err != nil {
-					problems[field] = err
-					ok = false
-					break // skip to next field
+				newValV := reflect.ValueOf(newVal)
+				if newValV.IsValid() {
+					f.Set(newValV)
 				}
 			}
 		}
-		if ok {
-			rVal := reflect.ValueOf(value)
-			if !rVal.IsValid() {
-				continue
-			}
-			f.Set(rVal)
-		}
 	}
 
-	if len(problems) > 0 {
-		return problems, nil
-	}
+	return problems, nil
 
-	return nil, nil
-
-}
-
-func NewMSIDecoder(src map[string]interface{}) Decoder {
-	return &msiDecoder{src: src, handlers: Handlers}
-}
-
-func NewJsonDecoder(decoder *json.Decoder) Decoder {
-	var data map[string]interface{}
-	decoder.Decode(&data)
-	return NewMSIDecoder(data)
 }
