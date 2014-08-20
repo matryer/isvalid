@@ -60,6 +60,13 @@ func (v *Validator) Valid(value interface{}) (Problems, error) {
 		if len(tag) == 0 {
 			continue
 		}
+		fieldname := f2.Name
+		// use json tag field name if available
+		jsonTag := f2.Tag.Get("json")
+		if len(jsonTag) > 0 {
+			fieldname = strings.Split(jsonTag, ",")[0]
+		}
+		// process is tag
 		hs := strings.Split(tag, ",")
 		for _, h := range hs {
 			var handlerFunc HandlerFunc
@@ -69,7 +76,7 @@ func (v *Validator) Valid(value interface{}) (Problems, error) {
 			}
 			newVal, err := handlerFunc(f.Interface())
 			if err != nil {
-				problems[f2.Name] = &Problem{Field: f2.Name, Err: err}
+				problems[fieldname] = &Problem{Field: fieldname, Err: err}
 				break // next field
 			} else {
 				newValV := reflect.ValueOf(newVal)
