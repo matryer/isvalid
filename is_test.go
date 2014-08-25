@@ -39,6 +39,16 @@ func TestIsnt(t *testing.T) {
 	require.Equal(t, 3, len(probs))
 	require.Equal(t, "Username is required", probs["Username"].Error())
 	require.Equal(t, "Email is not a valid email address", probs["Email"].Error())
-	require.Equal(t, "Number cannot be zero or empty", probs["Number"].Error())
+	require.Equal(t, "Number cannot be zero", probs["Number"].Error())
+
+}
+
+func TestLower(t *testing.T) {
+
+	var v interface{}
+	var err error
+	v, err = is.DefaultValidator.Handlers["lower"]("MonKEY")
+	require.NoError(t, err)
+	require.Equal(t, "monkey", v)
 
 }

@@ -6,30 +6,52 @@ import (
 	"strings"
 )
 
+// ErrInvalidTarget is returned when Valid is called on an
+// invalid object. Usually fixed by passing a pointer of the
+// object in, like Valid(&obj).
 var ErrInvalidTarget = errors.New("target must be non-nil pointer to struct")
 
+// Problem represents a single problem or failed validation.
 type Problem struct {
 	Field string
 	Err   error
 }
 
+// Error gets the string describing this problem.
 func (e Problem) Error() string {
 	return e.Field + " " + e.Err.Error()
 }
 
+// Problems represents a map of Problems to the appropriate
+// fields.
 type Problems map[string]*Problem
+
+// HandlerFunc is the a function that will be given a value,
+// which it may mutate and return, or else return an error if
+// something is wrong with it.
 type HandlerFunc func(interface{}) (interface{}, error)
 
+// DefaultValidator is the default Validator type.
 var DefaultValidator = NewValidator()
 
+// Valid checks to see if the specified object is valid or
+// not.
+//
+//     probs, err := Valid(&obj)
+//     if err != nil { /* something went seriously wrong */ }
+//     if len(probs) > 0 { /* some problems with the object */ }
 func Valid(value interface{}) (Problems, error) {
 	return DefaultValidator.Valid(value)
 }
 
+// Validator represents a type capable of validating
+// objects.
 type Validator struct {
 	Handlers map[string]HandlerFunc
 }
 
+// NewValidator makes a new Validator, configured with
+// the default handlers.
 func NewValidator() *Validator {
 	handlers := make(map[string]HandlerFunc)
 	for k, v := range defaultHandlers {
@@ -38,6 +60,8 @@ func NewValidator() *Validator {
 	return &Validator{Handlers: handlers}
 }
 
+// Valid checks to see if the specified object is valid or
+// not. See Valid() for more information.
 func (v *Validator) Valid(value interface{}) (Problems, error) {
 
 	problems := make(Problems)

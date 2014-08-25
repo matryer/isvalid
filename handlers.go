@@ -36,6 +36,7 @@ var defaultHandlers = map[string]HandlerFunc{
 				if len(val) > 0 {
 					return v, nil
 				}
+				return nil, errors.New("cannot be empty")
 			case int, int8, int16, int32, int64,
 				uint, uint8, uint16, uint32, uint64,
 				float32, float64, complex64, complex128:
@@ -44,7 +45,7 @@ var defaultHandlers = map[string]HandlerFunc{
 				}
 			}
 		}
-		return nil, errors.New("cannot be zero or empty")
+		return nil, errors.New("cannot be zero")
 	},
 	"email": func(v interface{}) (interface{}, error) {
 		// simple and quick email syntax checking
