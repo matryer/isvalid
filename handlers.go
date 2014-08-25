@@ -2,6 +2,7 @@ package is
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 )
 
@@ -38,7 +39,7 @@ var defaultHandlers = map[string]HandlerFunc{
 			case int, int8, int16, int32, int64,
 				uint, uint8, uint16, uint32, uint64,
 				float32, float64, complex64, complex128:
-				if val != 0 {
+				if val != reflect.Zero(reflect.TypeOf(val)).Interface() {
 					return v, nil
 				}
 			}
@@ -53,6 +54,11 @@ var defaultHandlers = map[string]HandlerFunc{
 		if email, ok = v.(string); !ok {
 			return nil, errors.New("should be a string")
 		}
+		if len(email) == 0 {
+			// no value to check - skip
+			return v, nil
+		}
+
 		atI := strings.Index(email, "@")
 		ok = atI > 0 && atI < len(email)-1
 		if ok {
