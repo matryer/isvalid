@@ -29,7 +29,7 @@ type Problems map[string]*Problem
 // HandlerFunc is the a function that will be given a value,
 // which it may mutate and return, or else return an error if
 // something is wrong with it.
-type HandlerFunc func(interface{}) (interface{}, error)
+type HandlerFunc func(handler string, v interface{}) (interface{}, error)
 
 // DefaultValidator is the default Validator type.
 var DefaultValidator = NewValidator()
@@ -42,6 +42,12 @@ var DefaultValidator = NewValidator()
 //     if len(probs) > 0 { /* some problems with the object */ }
 func Valid(value interface{}) (Problems, error) {
 	return DefaultValidator.Valid(value)
+}
+
+// GetValue processes the handler and gets the value or an
+// error.
+func GetValue(handler string, value interface{}) (interface{}, error) {
+	return DefaultValidator.GetValue(handler, value)
 }
 
 // Validator represents a type capable of validating
@@ -58,6 +64,17 @@ func NewValidator() *Validator {
 		handlers[k] = v
 	}
 	return &Validator{Handlers: handlers}
+}
+
+// GetValue processes the handler and gets the value or an
+// error.
+func (v *Validator) GetValue(handler string, value interface{}) (interface{}, error) {
+	for handlerKey, hf := range v.Handlers {
+		if strings.HasPrefix(handler, handlerKey) {
+			return hf(handler, value)
+		}
+	}
+	panic("is: do not understand " + handler)
 }
 
 // Valid checks to see if the specified object is valid or
@@ -93,12 +110,7 @@ func (v *Validator) Valid(value interface{}) (Problems, error) {
 		// process is tag
 		hs := strings.Split(tag, ",")
 		for _, h := range hs {
-			var handlerFunc HandlerFunc
-			var ok bool
-			if handlerFunc, ok = v.Handlers[h]; !ok {
-				panic("is: no such handler " + h)
-			}
-			newVal, err := handlerFunc(f.Interface())
+			newVal, err := v.GetValue(h, f.Interface())
 			if err != nil {
 				problems[fieldname] = &Problem{Field: fieldname, Err: err}
 				break // next field
